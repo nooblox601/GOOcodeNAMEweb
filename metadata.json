@@ -1,0 +1,5 @@
+{
+  "name": "Doodle Code: <google>.js",
+  "description": "An interactive Google Doodle-style VS Code experience for HTML, CSS, and JS with AI-powered code generation.",
+  "requestFramePermissions": []
+}
