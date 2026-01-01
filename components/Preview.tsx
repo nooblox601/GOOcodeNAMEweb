@@ -4,9 +4,10 @@ import { CodeState } from '../types';
 
 interface PreviewProps {
   code: CodeState;
+  transparent?: boolean;
 }
 
-const Preview: React.FC<PreviewProps> = ({ code }) => {
+const Preview: React.FC<PreviewProps> = ({ code, transparent = false }) => {
   const [srcDoc, setSrcDoc] = useState('');
 
   useEffect(() => {
@@ -15,31 +16,42 @@ const Preview: React.FC<PreviewProps> = ({ code }) => {
         <html>
           <head>
             <style>
-              body { margin: 0; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; background: transparent; }
+              body { 
+                margin: 0; 
+                padding: 0;
+                font-family: 'Product Sans', sans-serif; 
+                display: flex; 
+                align-items: center; 
+                justify-content: center; 
+                height: 100vh; 
+                background: transparent; 
+                overflow: hidden; 
+              }
               ${code.css}
             </style>
           </head>
           <body>
             ${code.html}
-            <script>${code.js}</script>
+            <script>
+              try {
+                ${code.js}
+              } catch (e) {
+                console.error("Doodle Error:", e);
+              }
+            </script>
           </body>
         </html>
       `);
-    }, 250);
+    }, 200);
 
     return () => clearTimeout(timeout);
   }, [code]);
 
   return (
-    <div className="w-full h-full bg-[#f1f3f4] rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center relative">
-      <div className="absolute top-3 left-3 flex space-x-1.5 opacity-30">
-        <div className="w-3 h-3 rounded-full bg-red-400"></div>
-        <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-        <div className="w-3 h-3 rounded-full bg-green-400"></div>
-      </div>
+    <div className={`w-full h-full overflow-hidden relative ${transparent ? 'bg-transparent' : 'bg-[#f1f3f4] rounded-2xl border border-gray-100'}`}>
       <iframe
         srcDoc={srcDoc}
-        title="preview"
+        title="doodle-preview"
         sandbox="allow-scripts"
         frameBorder="0"
         width="100%"

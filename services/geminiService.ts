@@ -1,20 +1,39 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { GeminiResponse } from "../types";
+import { GeminiResponse, CodeState } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-export const generateDoodleCode = async (prompt: string): Promise<GeminiResponse> => {
-  const model = "gemini-3-flash-preview";
+export const generateAppContent = async (
+  prompt: string, 
+  currentCode?: CodeState,
+  chatHistory: any[] = []
+): Promise<GeminiResponse> => {
+  // Usando Gemini 3 Pro para tarefas complexas de codificação
+  const model = "gemini-3-pro-preview";
   
+  const systemInstruction = `Você é o "Kernel" de um Navegador de IA. 
+  Sua função é transformar as intenções do usuário em aplicações web completas e funcionais.
+  
+  Se o usuário enviar um comando novo: Crie um app do zero.
+  Se o usuário pedir modificações e você receber o 'currentCode': Altere apenas as partes necessárias do código atual para satisfazer o pedido.
+  
+  REGRAS:
+  - Retorne SEMPRE um JSON com html, css e js.
+  - HTML: Estrutura sem tags html/head/body, apenas o que vai dentro do body.
+  - CSS: Moderno, usando variáveis e flexbox/grid.
+  - JS: Funcionalidade real, sem placeholders. Use APIs do navegador quando apropriado.
+  - Design: Estética de software premium, clean e responsivo.`;
+
+  const contents = currentCode 
+    ? `PROMPT: ${prompt}\n\nCÓDIGO ATUAL:\nHTML: ${currentCode.html}\nCSS: ${currentCode.css}\nJS: ${currentCode.js}`
+    : prompt;
+
   const response = await ai.models.generateContent({
     model,
-    contents: `Generate a fun, visual web animation or interactive doodle based on this prompt: "${prompt}". 
-    Return the HTML, CSS, and JS separately in a JSON format. 
-    The HTML should only contain the internal body content (no <html>, <head>, or <body> tags). 
-    The CSS should be ready to put in a <style> tag.
-    The JS should be ready to put in a <script> tag.`,
+    contents,
     config: {
+      systemInstruction,
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -22,6 +41,7 @@ export const generateDoodleCode = async (prompt: string): Promise<GeminiResponse
           html: { type: Type.STRING },
           css: { type: Type.STRING },
           js: { type: Type.STRING },
+          explanation: { type: Type.STRING, description: "Breve explicação do que foi feito." }
         },
         required: ["html", "css", "js"],
       },
@@ -31,11 +51,7 @@ export const generateDoodleCode = async (prompt: string): Promise<GeminiResponse
   try {
     return JSON.parse(response.text.trim()) as GeminiResponse;
   } catch (error) {
-    console.error("Failed to parse Gemini response", error);
-    return {
-      html: "<h1>Error</h1>",
-      css: "h1 { color: red; }",
-      js: "console.log('Error generating code');"
-    };
+    console.error("Gemini Parse Error", error);
+    throw error;
   }
 };

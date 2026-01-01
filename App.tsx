@@ -1,51 +1,76 @@
 
-import React, { useState, useCallback, useEffect } from 'react';
-import Logo from './components/Logo';
+import React, { useState, useRef, useEffect } from 'react';
 import Editor from './components/Editor';
 import Preview from './components/Preview';
-import { CodeState, TabType } from './types';
-import { generateDoodleCode } from './services/geminiService';
-import { Sparkles, Play, RotateCcw, Ghost } from 'lucide-react';
+import { CodeState, TabType, ChatMessage } from './types';
+import { generateAppContent } from './services/geminiService';
+import { 
+  Search, 
+  Terminal, 
+  ArrowLeft, 
+  ArrowRight, 
+  RefreshCw, 
+  Plus, 
+  X, 
+  ChevronDown, 
+  Lock,
+  Sparkles,
+  Layout,
+  MessageSquare,
+  History,
+  Settings,
+  Monitor,
+  Send,
+  Code2,
+  Layers
+} from 'lucide-react';
 
 const INITIAL_CODE: CodeState = {
-  html: `<div class="doodle-container">
-  <div class="circle"></div>
-  <h1>Happy Coding!</h1>
+  html: `<div class="os-welcome">
+  <div class="glass-card">
+    <div class="badge">AI BROWSER OS</div>
+    <h1>O Futuro da Web é Gerativo</h1>
+    <p>A barra de endereços agora é o seu terminal criativo.</p>
+    <div class="actions">
+      <button onclick="document.querySelector('input').focus()">Começar a Criar</button>
+    </div>
+  </div>
 </div>`,
-  css: `.doodle-container {
-  text-align: center;
-}
-.circle {
-  width: 100px;
-  height: 100px;
-  background: #4285F4;
-  border-radius: 50%;
-  margin: 0 auto 20px;
-  animation: bounce 2s infinite;
-}
-@keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-30px); }
-}`,
-  js: `console.log("Welcome to the <google>.js Doodle!");`
+  css: `body { background: #0f172a; color: white; font-family: 'Inter', sans-serif; }
+.os-welcome { height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at top right, #1e293b, #0f172a); }
+.glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); padding: 3rem; border-radius: 2rem; border: 1px border rgba(255,255,255,0.1); text-align: center; max-width: 500px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+.badge { background: #3b82f6; color: white; font-size: 0.7rem; font-weight: 800; padding: 0.3rem 0.8rem; border-radius: 1rem; display: inline-block; margin-bottom: 1rem; letter-spacing: 0.1em; }
+h1 { font-size: 2.5rem; font-weight: 800; margin: 0; background: linear-gradient(to right, #60a5fa, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+p { color: #94a3b8; margin-top: 1rem; font-size: 1.1rem; }
+.actions { margin-top: 2rem; }
+button { background: white; color: black; border: none; padding: 0.8rem 2rem; border-radius: 0.8rem; font-weight: 600; cursor: pointer; transition: transform 0.2s; }
+button:hover { transform: scale(1.05); }`,
+  js: `console.log("Kernel Iniciado...");`
 };
 
 const App: React.FC = () => {
   const [code, setCode] = useState<CodeState>(INITIAL_CODE);
   const [activeTab, setActiveTab] = useState<TabType>('html');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [prompt, setPrompt] = useState('');
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [url, setUrl] = useState('');
+  const [chatInput, setChatInput] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const handleCodeChange = (value: string) => {
-    setCode(prev => ({ ...prev, [activeTab]: value }));
-  };
+  const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  useEffect(scrollToBottom, [messages]);
 
-  const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+  const handleCreate = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!url.trim()) return;
+    
     setIsGenerating(true);
     try {
-      const generated = await generateDoodleCode(prompt);
-      setCode(generated);
+      const response = await generateAppContent(url);
+      setCode({ html: response.html, css: response.css, js: response.js });
+      setMessages([{ role: 'assistant', content: response.explanation || `Aplicação "${url}" gerada com sucesso!` }]);
     } catch (error) {
       console.error(error);
     } finally {
@@ -53,133 +78,197 @@ const App: React.FC = () => {
     }
   };
 
-  const handleReset = () => {
-    setCode(INITIAL_CODE);
-    setPrompt('');
-  };
+  const handleChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isGenerating) return;
 
-  const handleLucky = async () => {
-    const luckyPrompts = [
-      "A colorful particle explosion",
-      "A jumping Google logo",
-      "A retro 8-bit game scene",
-      "A morphing lava lamp animation",
-      "A procedural flower garden",
-      "Floating geometric shapes in space"
-    ];
-    const randomPrompt = luckyPrompts[Math.floor(Math.random() * luckyPrompts.length)];
-    setPrompt(randomPrompt);
+    const userMsg = chatInput;
+    setChatInput('');
+    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    
     setIsGenerating(true);
     try {
-      const generated = await generateDoodleCode(randomPrompt);
-      setCode(generated);
+      const response = await generateAppContent(userMsg, code, messages);
+      setCode({ html: response.html, css: response.css, js: response.js });
+      setMessages(prev => [...prev, { role: 'assistant', content: response.explanation || "Código atualizado!" }]);
     } catch (error) {
-      console.error(error);
+      setMessages(prev => [...prev, { role: 'assistant', content: "Ops, ocorreu um erro ao processar seu pedido." }]);
     } finally {
       setIsGenerating(false);
     }
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#f8f9fa] overflow-hidden">
-      {/* Header */}
-      <header className="px-8 py-4 flex items-center justify-between border-b border-gray-100 bg-white/80 backdrop-blur-md z-10">
-        <Logo />
-        
-        <div className="flex-1 max-w-2xl px-12">
-          <div className="relative flex items-center group">
-            <input
-              type="text"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="What kind of doodle should we build today?"
-              className="w-full px-6 py-3 bg-[#f1f3f4] border border-transparent rounded-full focus:bg-white focus:border-[#4285F4] focus:shadow-md transition-all outline-none text-sm group-hover:bg-[#e8eaed]"
-              onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
+    <div className="h-screen w-screen flex bg-[#0f172a] text-slate-300 overflow-hidden font-sans border border-slate-800 rounded-lg">
+      
+      {/* Sidebar - AI Sidekick */}
+      <aside className={`flex flex-col bg-[#1e293b] border-r border-slate-800 transition-all duration-300 ${isSidebarOpen ? 'w-80' : 'w-0 opacity-0'}`}>
+        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Sparkles className="w-5 h-5 text-blue-400" />
+            <span className="font-bold text-white text-sm">AI SIDEKICK</span>
+          </div>
+          <button onClick={() => setIsSidebarOpen(false)} className="text-slate-500 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Chat History */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.length === 0 && (
+            <div className="text-center py-10 opacity-30">
+              <MessageSquare className="w-12 h-12 mx-auto mb-2" />
+              <p className="text-xs">Inicie um projeto para conversar com a IA</p>
+            </div>
+          )}
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+              <div className={`max-w-[90%] p-3 rounded-2xl text-xs leading-relaxed ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-200 rounded-tl-none'}`}>
+                {msg.content}
+              </div>
+            </div>
+          ))}
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Chat Input */}
+        <form onSubmit={handleChat} className="p-4 bg-slate-900/50 border-t border-slate-800">
+          <div className="relative">
+            <input 
+              type="text" 
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              placeholder="Refinar página..."
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl py-2 pl-3 pr-10 text-xs text-white outline-none focus:border-blue-500 transition-all"
             />
-            <div className="absolute right-2 flex space-x-1">
+            <button className="absolute right-2 top-1.5 text-blue-500 hover:text-blue-400">
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+        </form>
+      </aside>
+
+      {/* Main Browser Window */}
+      <div className="flex-1 flex flex-col relative">
+        
+        {/* Browser Tabs & Chrome */}
+        <div className="bg-[#1e293b] pt-2">
+          <div className="flex items-center px-4 space-x-2">
+            <div className="flex items-center bg-[#0f172a] text-white px-4 py-2 rounded-t-lg text-xs space-x-3 w-64 shadow-lg border-t border-x border-slate-700">
+              <Layout className="w-3 h-3 text-blue-400" />
+              <span className="truncate flex-1">{url || 'Nova Criação'}</span>
+              <X className="w-3 h-3 hover:bg-slate-700 rounded p-0.5 cursor-pointer" />
+            </div>
+            <button className="p-1.5 hover:bg-slate-700 rounded-full text-slate-500">
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="h-14 bg-[#0f172a] flex items-center px-4 space-x-4 border-b border-slate-800">
+            <div className="flex space-x-3 text-slate-500">
+              <ArrowLeft className="w-4 h-4 hover:text-white cursor-pointer" />
+              <ArrowRight className="w-4 h-4 hover:text-white cursor-pointer" />
+              <RefreshCw className={`w-4 h-4 hover:text-white cursor-pointer ${isGenerating ? 'animate-spin text-blue-500' : ''}`} />
+            </div>
+
+            <form onSubmit={handleCreate} className="flex-1">
+              <div className="relative flex items-center group">
+                <div className="absolute left-4 text-slate-500 group-focus-within:text-blue-400 transition-colors">
+                  <Search className="w-4 h-4" />
+                </div>
+                <input 
+                  type="text"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="O que você quer criar hoje? Ex: Um app de tarefas futurista"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-full py-2 pl-12 pr-4 text-sm text-slate-200 outline-none focus:border-blue-500/50 focus:bg-slate-900 transition-all"
+                />
+                <div className="absolute right-4">
+                  <Sparkles className={`w-4 h-4 ${isGenerating ? 'text-blue-500 animate-pulse' : 'text-slate-700'}`} />
+                </div>
+              </div>
+            </form>
+
+            <div className="flex items-center space-x-3">
               <button 
-                onClick={handleGenerate}
-                disabled={isGenerating}
-                className={`p-2 rounded-full text-white transition-all ${isGenerating ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#4285F4] hover:bg-[#3367d6] shadow-sm'}`}
+                onClick={() => setIsEditorOpen(!isEditorOpen)}
+                className={`p-2 rounded-lg transition-all ${isEditorOpen ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-500'}`}
               >
-                {isGenerating ? <RotateCcw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                <Terminal className="w-5 h-5" />
               </button>
+              {!isSidebarOpen && (
+                <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500">
+                  <MessageSquare className="w-5 h-5" />
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
-          <button 
-            onClick={handleLucky}
-            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <Ghost className="w-4 h-4 text-[#FBBC05]" />
-            <span>I'm Feeling Lucky</span>
-          </button>
-          <button 
-            onClick={handleReset}
-            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-            title="Reset to default"
-          >
-            <RotateCcw className="w-5 h-5" />
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="flex-1 flex p-4 gap-4 overflow-hidden">
-        {/* Sidebar Mini-Activity Bar */}
-        <div className="w-16 flex flex-col items-center py-4 space-y-6 bg-white rounded-2xl border border-gray-100 hidden md:flex">
-          <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
-             <Play className="w-6 h-6" />
-          </div>
-          <div className="p-2 rounded-lg text-gray-400 hover:bg-gray-50 transition-colors cursor-pointer">
-             <Sparkles className="w-6 h-6" />
-          </div>
+        {/* Viewport Content */}
+        <div className="flex-1 relative bg-[#0f172a]">
+          <Preview code={code} />
+          
+          {isGenerating && (
+            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+              <div className="relative w-20 h-20">
+                <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+              <p className="mt-6 text-sm font-bold text-white tracking-[0.3em] uppercase animate-pulse">
+                Sincronizando com a Rede Neural
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* Editor Area */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1">
-            <Editor 
-              activeTab={activeTab} 
-              setActiveTab={setActiveTab} 
-              code={code[activeTab]} 
-              onChange={handleCodeChange} 
-            />
+        {/* Floating DevTools Bar */}
+        <div className="h-6 bg-[#1e293b] border-t border-slate-800 flex items-center justify-between px-4 text-[9px] font-bold text-slate-500 tracking-widest uppercase">
+          <div className="flex items-center space-x-4">
+             <div className="flex items-center space-x-2">
+               <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+               <span>Electron Node: Active</span>
+             </div>
+             <div className="h-3 w-px bg-slate-700"></div>
+             <span>GPU Acceleration: On</span>
+          </div>
+          <div className="flex space-x-4">
+            <span>RAM: 124MB</span>
+            <span>Uptime: 01:24:00</span>
           </div>
         </div>
 
-        {/* Preview Area */}
-        <div className="flex-1 flex flex-col min-w-0">
-           <Preview code={code} />
-        </div>
-      </main>
-
-      {/* Footer / Status Bar */}
-      <footer className="h-8 bg-[#4285F4] text-white flex items-center justify-between px-6 text-[10px] uppercase font-bold tracking-widest">
-        <div className="flex items-center space-x-4">
-          <span>Main Line: 42</span>
-          <span>UTF-8</span>
-          <span>{activeTab === 'js' ? 'JavaScript' : activeTab.toUpperCase()} Mode</span>
-        </div>
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center">
-            <span className="w-2 h-2 rounded-full bg-green-400 mr-2 animate-pulse"></span>
-            Connected to Gemini API
+        {/* Bottom Integrated Editor */}
+        <div className={`absolute bottom-6 left-0 right-0 z-[60] transition-all duration-500 transform ${isEditorOpen ? 'translate-y-0 opacity-100 px-6' : 'translate-y-full opacity-0 pointer-events-none px-6'}`}>
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl h-[45vh] flex flex-col overflow-hidden">
+            <div className="p-3 bg-slate-800/50 border-b border-slate-700 flex items-center justify-between">
+              <div className="flex space-x-2">
+                {(['html', 'css', 'js'] as TabType[]).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${activeTab === tab ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setIsEditorOpen(false)} className="text-slate-500 hover:text-white p-1">
+                <ChevronDown className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1">
+              <Editor 
+                activeTab={activeTab} 
+                setActiveTab={setActiveTab} 
+                code={code[activeTab]} 
+                onChange={(val) => setCode(prev => ({...prev, [activeTab]: val}))}
+                minimal
+              />
+            </div>
           </div>
         </div>
-      </footer>
-
-      {/* Loading Overlay */}
-      {isGenerating && (
-        <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-50 flex flex-col items-center justify-center">
-          <div className="w-16 h-16 border-4 border-t-[#4285F4] border-r-[#EA4335] border-b-[#FBBC05] border-l-[#34A853] rounded-full animate-spin mb-4"></div>
-          <p className="text-lg font-bold text-gray-700 animate-pulse italic">
-            Generating your <span className="text-[#4285F4]">&lt;google&gt;</span>.js doodle...
-          </p>
-        </div>
-      )}
+      </div>
     </div>
   );
 };
